@@ -1,0 +1,13 @@
+node_modules/
+.env
+.env.*
+!.env.example
+data/
+sessions/
+uploads/
+*.sqlite
+*.sqlite-*
+*.db
+*.db-*
+coverage/
+npm-debug.log*
