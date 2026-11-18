@@ -1,10 +1,10 @@
 import { randomUUID } from 'node:crypto';
 import { readFile } from 'node:fs/promises';
-import { join } from 'node:path';
-import { db, dataDir } from './db.js';
+import { db } from './db.js';
 import { socketFor } from './whatsapp.js';
+import { uploadPath } from './upload-store.js';
 
-export async function send(accountId, jid, text, attachmentId, scheduledAt = null, reservedId = null) {
+export async function send(accountId, jid, text, attachmentId, scheduledAt = null, reservedId = null, reservation = null) {
   const id = reservedId || randomUUID();
   const now = new Date().toISOString();
   if (!reservedId) db.prepare('INSERT INTO history(id, account_id, jid, text, scheduled_at, created_at, status, detail) VALUES (?, ?, ?, ?, ?, ?, ?, ?)').run(id, accountId, jid, text, scheduledAt, now, 'pending', 'Pengiriman sedang diproses');
@@ -16,9 +16,11 @@ export async function send(accountId, jid, text, attachmentId, scheduledAt = nul
       const file = db.prepare('SELECT * FROM attachments WHERE id=? AND account_id=?').get(attachmentId, accountId);
       if (!file) throw new Error('Lampiran tidak ditemukan pada akun ini');
       if (!/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(file.id)) throw new Error('ID lampiran tidak valid');
-      const bytes = await readFile(join(dataDir, 'uploads', file.id));
+      const bytes = await readFile(uploadPath(file.id));
       content = file.mime.startsWith('image/') ? { image: bytes, caption: text } : { document: bytes, mimetype: file.mime, fileName: file.name, caption: text };
     }
+    if (!db.prepare('SELECT 1 FROM accounts a WHERE a.id=? AND NOT EXISTS (SELECT 1 FROM revoked_users WHERE user_id=a.owner_id)').get(accountId)) throw new Error('Akun tidak tersedia');
+    if (reservation && !db.prepare("SELECT 1 FROM schedules s JOIN accounts a ON a.id=s.account_id WHERE s.id=? AND s.account_id=? AND s.enabled=1 AND s.revision=? AND a.role='ordinary'").get(reservation.scheduleId, accountId, reservation.revision)) throw new Error('Pengiriman jadwal dibatalkan karena akun atau jadwal berubah sebelum pengiriman');
     await socket.sendMessage(jid, content);
     finalize(id, 'success', '');
     return { id, status: 'success' };

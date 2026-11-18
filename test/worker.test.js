@@ -10,7 +10,7 @@ const { db } = await import('../src/db.js');
 const { tick } = await import('../src/worker.js');
 
 test('startup records missed occurrences and keeps weekly schedule moving', async () => {
-  db.prepare('INSERT INTO accounts VALUES (?,?)').run('account', 'Test');
+  db.prepare("INSERT INTO accounts(id,name,owner_id) VALUES (?,?,'legacy-admin')").run('account', 'Test');
   db.prepare('INSERT INTO schedules(id,account_id,jid,text,attachment_id,repeat,next_at,created_at) VALUES (?,?,?,?,?,?,?,?)').run('schedule', 'account', '62812345678@s.whatsapp.net', 'Pesan', null, 'weekly', '2026-11-05T02:30:00.000Z', '2026-11-01T00:00:00.000Z');
   await tick({ startup: true, now: Date.parse('2026-11-12T02:31:00Z') });
   assert.equal(db.prepare('SELECT next_at FROM schedules WHERE id=?').get('schedule').next_at, '2026-11-19T02:30:00.000Z');

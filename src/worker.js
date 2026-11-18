@@ -29,7 +29,7 @@ export async function tick({ startup = false, now = Date.now() } = {}) {
           db.exec('COMMIT');
         } catch (e) { db.exec('ROLLBACK'); throw e; }
         if (!skip) {
-          await send(row.account_id, row.jid, row.text, row.attachment_id, scheduled, historyId);
+          await send(row.account_id, row.jid, row.text, row.attachment_id, scheduled, historyId, { scheduleId: row.id, revision: row.revision + 1 });
         }
         if (!next) break;
       }

@@ -17,6 +17,10 @@ button:active { transform: translateY(1px); }
 .brand { font-weight: 800; font-size: 1.35rem; text-decoration: none; letter-spacing: -.035em; }
 .brand span { display: block; font-size: .75rem; font-weight: 500; letter-spacing: 0; color: #f3d2b9; }
 .top-actions { display: flex; align-items: center; flex-wrap: wrap; gap: .5rem; }
+#apk-download:not([hidden]) { display: inline-flex; align-items: center; min-height: 44px; padding: .5rem .75rem; border: 1px solid var(--line); border-radius: 6px; font-weight: 700; }
+#apk-download:hover { background: var(--soft); }
+#apk-download:active { transform: translateY(1px); }
+@media (max-width: 480px) { #apk-download { margin-left: auto; } }
 main { max-width: 1500px; margin: auto; padding: clamp(1rem, 4vw, 3rem); }
 .login { max-width: 32rem; margin: 8vh auto; padding: clamp(1.5rem, 4vw, 3rem); background: var(--surface); border: 1px solid var(--line); border-radius: 12px; box-shadow: 0 12px 32px #0002; }
 h1, h2, h3, p { margin-top: 0; }
@@ -140,6 +144,17 @@ nav a[aria-current="page"] { background: var(--soft); color: var(--accent); text
   #akun > *, #kontak > *, #template > * { grid-column: 1; }
   #akun > .list, #kontak > .list, #template > .list { margin-top: 1.5rem; }
 }
+.auth-actions { display: flex; flex-wrap: wrap; gap: .6rem; margin: 1rem 0; }
+.auth-actions button { margin: 0; }
+.login details { border-top: 1px solid var(--line); margin-top: 1.5rem; padding-top: 1rem; }
+.login summary { min-height: 44px; font-weight: 700; }
+#account-role-field label, #bot > label { display: block; font-weight: 650; margin: .8rem 0 .3rem; }
+#account-role-field select, #bot-account { width: 100%; }
+#bot { grid-column: 2; }
+#bot-settings { max-width: 48rem; }
+#bot-settings h3 { margin-top: 2rem; }
+#bot-model-list { overflow-wrap: anywhere; }
+@media (max-width: 900px) { #bot { grid-column: 1; } }
 
 :root { --bg: #f1ede9; --surface: #fff; --ink: #211a16; --muted: #594d46; --line: #827369; --accent: #a83e00; --soft: #fff0e5; }
 :root[data-theme="dark"] { --bg: #11100f; --surface: #211d1a; --ink: #fff7f0; --muted: #d5c7bc; --line: #a89a8e; --accent: #ff9a52; --soft: #3d2a20; }

@@ -10,7 +10,7 @@ test('pending delivery is finalized once and crash recovery never retries', asyn
   const { db } = await import('../src/db.js');
   const { finalize, recoverPending } = await import('../src/sender.js');
   try {
-    db.prepare('INSERT INTO accounts VALUES (?,?)').run('a', 'A');
+    db.prepare("INSERT INTO accounts(id,name,owner_id) VALUES (?,?,'legacy-admin')").run('a', 'A');
     const insert = db.prepare('INSERT INTO history VALUES (?,?,?,?,?,?,?,?)');
     insert.run('one', 'a', '62812345678@s.whatsapp.net', 'x', '2026-01-01', '2026-01-01', 'pending', 'diproses');
     insert.run('two', 'a', '62812345678@s.whatsapp.net', 'x', '2026-01-01', '2026-01-01', 'pending', 'diproses');

@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { spawn, spawnSync } from 'node:child_process';
-import { mkdtempSync, rmSync } from 'node:fs';
+import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createServer } from 'node:net';
@@ -57,8 +57,8 @@ test('login, CSRF guard, templates, filters and upload validation', async () => 
     const body = new FormData(); body.append('accountId', '../x'); body.append('file', new Blob(['bad'], { type: 'application/pdf' }), 'x.pdf');
     assert.equal((await fetch(`${base}/api/attachments`, { method: 'POST', headers: { cookie, 'x-dashboard-request': '1' }, body })).status, 400);
     const seed = new DatabaseSync(join(dir, 'dashboard.sqlite'));
-    seed.prepare('INSERT INTO accounts VALUES (?,?)').run('a', 'A');
-    seed.prepare('INSERT INTO accounts VALUES (?,?)').run('b', 'B');
+    seed.prepare("INSERT INTO accounts(id,name,owner_id) VALUES (?,?,'legacy-admin')").run('a', 'A');
+    seed.prepare("INSERT INTO accounts(id,name,owner_id) VALUES (?,?,'legacy-admin')").run('b', 'B');
     const hist = seed.prepare('INSERT INTO history VALUES (?,?,?,?,?,?,?,?)');
     const event = seed.prepare('INSERT INTO history_events(history_id) VALUES (?)');
     for (let i = 0; i < 205; i++) { hist.run(`event-${i}`, i % 2 ? 'a' : 'b', '62812345678@s.whatsapp.net', 'pesan', '2026-01-01T00:00:00.000Z', '2026-01-01T00:00:00.000Z', 'missed', 'terlewat'); event.run(`event-${i}`); }
@@ -89,6 +89,20 @@ test('login, CSRF guard, templates, filters and upload validation', async () => 
     const uploaded = await upload.json();
     assert.ok(uploaded.name.endsWith('.pdf'));
     assert.ok(!uploaded.name.includes('/'));
+    const uploadDb = new DatabaseSync(join(dir, 'dashboard.sqlite'));
+    assert.deepEqual({ ...uploadDb.prepare('SELECT account_id,ready FROM upload_files WHERE id=?').get(uploaded.id) }, { account_id: 'a', ready: 1 });
+    assert.equal(readFileSync(join(dir, 'uploads-v2', uploaded.id, 'data'), 'utf8'), '%PDF-test');
+    uploadDb.close();
+    const concurrent = await Promise.all(Array.from({ length: 4 }, (_, i) => {
+      const form = new FormData();
+      form.append('accountId', 'a');
+      form.append('file', new Blob([`concurrent-${i}`]), `concurrent-${i}.txt`);
+      return fetch(`${base}/api/attachments`, { method: 'POST', headers: { cookie, 'x-dashboard-request': '1' }, body: form });
+    }));
+    assert.deepEqual(concurrent.map(response => response.status), [201, 201, 201, 201]);
+    const concurrentIds = await Promise.all(concurrent.map(response => response.json()));
+    assert.equal(new Set(concurrentIds.map(item => item.id)).size, 4);
+    for (let i = 0; i < concurrentIds.length; i++) assert.equal(readFileSync(join(dir, 'uploads-v2', concurrentIds[i].id, 'data'), 'utf8'), `concurrent-${i}`);
     assert.equal((await fetch(`${base}/uploads/${uploaded.id}`, { headers })).status, 404);
     const textFile = new FormData(); textFile.append('accountId', 'a'); textFile.append('file', new Blob(['isi teks'], { type: 'application/octet-stream' }), 'catatan.txt');
     assert.equal((await fetch(`${base}/api/attachments`, { method: 'POST', headers: { cookie, 'x-dashboard-request': '1' }, body: textFile })).status, 201);
@@ -144,5 +158,34 @@ test('login, CSRF guard, templates, filters and upload validation', async () => 
   } finally {
     child.kill('SIGTERM'); await new Promise(resolve => child.once('exit', resolve));
     rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('legacy login denies revoked user and revoked linked Google subject', async () => {
+  for (const kind of ['google', 'user']) {
+    const dir = mkdtempSync(join(tmpdir(), 'wa-revoked-login-'));
+    const probe = createServer();
+    await new Promise(resolve => probe.listen(0, '127.0.0.1', resolve));
+    const port = probe.address().port;
+    await new Promise(resolve => probe.close(resolve));
+    const child = spawn(process.execPath, ['src/server.js'], { env: { ...process.env, DATA_DIR: dir, PORT: String(port), ADMIN_PASSWORD: 'x', SESSION_SECRET: 'test-secret-at-least-thirty-two-characters' }, stdio: ['ignore', 'pipe', 'pipe'] });
+    let output = ''; child.stderr.on('data', b => { output += b; });
+    const base = `http://127.0.0.1:${port}`;
+    try {
+      let ready = false;
+      for (let i = 0; i < 100; i++) { try { await fetch(base); ready = true; break; } catch { await new Promise(r => setTimeout(r, 100)); } }
+      assert.ok(ready, output);
+      const seed = new DatabaseSync(join(dir, 'dashboard.sqlite'));
+      if (kind === 'google') seed.exec("UPDATE users SET google_sub='revoked-sub' WHERE id='legacy-admin'; INSERT INTO revoked_google_subs VALUES ('revoked-sub')");
+      else seed.exec("INSERT INTO revoked_users VALUES ('legacy-admin','2026-01-01')");
+      seed.close();
+      const response = await fetch(`${base}/api/login`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ password: 'x' }) });
+      assert.equal(response.status, 401);
+      assert.deepEqual(await response.json(), { error: 'Autentikasi gagal' });
+      assert.equal(response.headers.get('set-cookie'), null);
+    } finally {
+      child.kill('SIGTERM'); await new Promise(resolve => child.once('exit', resolve));
+      rmSync(dir, { recursive: true, force: true });
+    }
   }
 });
